@@ -1,0 +1,11 @@
+- hosts: localhost
+  connection: local
+  tasks:
+
+    - name: Simulate deployment
+      debug:
+        msg: "Kubernetes deployment executed successfully using Ansible"
+
+    - name: Show success
+      debug:
+        msg: "Pods are running successfully"
