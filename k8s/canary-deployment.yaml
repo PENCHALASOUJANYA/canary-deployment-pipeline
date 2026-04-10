@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-canary
+  namespace: canary-demo
+  labels:
+    app: canary-app
+    version: canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: canary-app
+  template:
+    metadata:
+      labels:
+        app: canary-app
+        version: canary
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: app
+          image: canary-app:v2          # ✅ FIXED (local image)
+          imagePullPolicy: Never       # ✅ VERY IMPORTANT
+          ports:
+            - containerPort: 5000
+          env:
+            - name: APP_VERSION
+              value: "v2"
+            - name: APP_COLOR
+              value: "#22C55E"
+            - name: ERROR_RATE
+              value: "0.0"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10

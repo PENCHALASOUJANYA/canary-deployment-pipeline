@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Canary App – {{ version }}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f0f4f8;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 48px 64px;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      max-width: 480px;
+      width: 90%;
+    }
+    .badge {
+      display: inline-block;
+      background: {{ color }};
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 16px;
+      border-radius: 999px;
+      margin-bottom: 24px;
+      letter-spacing: 0.5px;
+    }
+    h1 { font-size: 28px; color: #1e293b; margin-bottom: 12px; }
+    p  { color: #64748b; font-size: 15px; line-height: 1.6; }
+    .pod {
+      margin-top: 24px;
+      font-size: 12px;
+      color: #94a3b8;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">{{ version }}</div>
+    <h1>🚀 Canary Deployment Demo</h1>
+    <p>
+      You are being served by <strong>{{ version }}</strong>.<br/>
+      This application demonstrates Canary Deployment with
+      automatic health-based rollback.
+    </p>
+    <div class="pod">Pod: {{ pod }}</div>
+  </div>
+</body>
+</html>

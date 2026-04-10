@@ -1,0 +1,22 @@
+# HOW TRAFFIC SPLITTING WORKS:
+# Kubernetes Service selects ALL pods with label app=canary-app
+# With 9 stable pods + 1 canary pod = 10 endpoints total
+# kube-proxy round-robins → ~90% hits stable, ~10% hits canary
+# No additional tools needed for basic splitting!
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: canary-app-svc
+  namespace: canary-demo
+  labels:
+    app: canary-app
+spec:
+  selector:
+    app: canary-app        # ← selects BOTH stable and canary pods
+  ports:
+    - name:       http
+      protocol:   TCP
+      port:       80
+      targetPort: 5000
+  type: NodePort           # use LoadBalancer in cloud, NodePort for Minikube

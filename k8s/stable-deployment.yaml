@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-stable
+  namespace: canary-demo
+  labels:
+    app: canary-app
+    version: stable
+spec:
+  replicas: 9
+  selector:
+    matchLabels:
+      app: canary-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: canary-app
+        version: stable
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "5000"
+        prometheus.io/path:   "/metrics"
+    spec:
+      containers:
+        - name: app
+          image: canary-app:v1              # ✅ FIXED
+          imagePullPolicy: Never           # ✅ IMPORTANT
+          ports:
+            - containerPort: 5000
+          env:
+            - name: APP_VERSION
+              value: "v1"
+            - name: APP_COLOR
+              value: "#3B82F6"
+            - name: ERROR_RATE
+              value: "0.0"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10

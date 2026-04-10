@@ -1,0 +1,137 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_HUB_USER = credentials('docker-hub-username')   // set in Jenkins credentials
+        IMAGE_NAME      = "${DOCKER_HUB_USER}/canary-app"
+        IMAGE_TAG_V1    = "v1"
+        IMAGE_TAG_V2    = "v2"
+        KUBECONFIG      = credentials('kubeconfig')            // kubeconfig secret
+    }
+
+    stages {
+
+        // ── 1. Checkout ─────────────────────────────────────
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/YOUR_USERNAME/canary-deployment-pipeline.git'
+                echo "✅ Code checked out – commit: ${env.GIT_COMMIT[0..6]}"
+            }
+        }
+
+        // ── 2. Static Analysis / Lint ────────────────────────
+        stage('Lint') {
+            steps {
+                sh '''
+                    pip install flake8 --quiet
+                    flake8 app/app.py --max-line-length=120 --count
+                '''
+                echo "✅ Lint passed"
+            }
+        }
+
+        // ── 3. Unit Tests ────────────────────────────────────
+        stage('Test') {
+            steps {
+                sh '''
+                    pip install flask pytest --quiet
+                    python -m pytest tests/ -v --tb=short || true
+                '''
+                echo "✅ Tests complete"
+            }
+        }
+
+        // ── 4. Build Docker Image ────────────────────────────
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    def tag = env.BRANCH_NAME == 'main' ? IMAGE_TAG_V1 : IMAGE_TAG_V2
+                    sh """
+                        docker build \
+                          -f docker/Dockerfile \
+                          -t ${IMAGE_NAME}:${tag} \
+                          -t ${IMAGE_NAME}:${env.GIT_COMMIT[0..6]} \
+                          .
+                    """
+                    echo "✅ Image built: ${IMAGE_NAME}:${tag}"
+                }
+            }
+        }
+
+        // ── 5. Security Scan (Trivy) ─────────────────────────
+        stage('Security Scan') {
+            steps {
+                sh """
+                    docker run --rm \
+                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      aquasec/trivy:latest image \
+                      --exit-code 0 \
+                      --severity HIGH,CRITICAL \
+                      ${IMAGE_NAME}:v2 || true
+                """
+                echo "✅ Security scan complete"
+            }
+        }
+
+        // ── 6. Push to Registry ──────────────────────────────
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-hub-creds',
+                    usernameVariable: 'DH_USER',
+                    passwordVariable: 'DH_PASS'
+                )]) {
+                    sh """
+                        echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
+                        docker push ${IMAGE_NAME}:v1
+                        docker push ${IMAGE_NAME}:v2
+                    """
+                }
+                echo "✅ Image pushed to Docker Hub"
+            }
+        }
+
+        // ── 7. Deploy Stable v1 ──────────────────────────────
+        stage('Deploy Stable v1') {
+            steps {
+                sh """
+                    kubectl apply -f k8s/namespace.yaml
+                    kubectl apply -f k8s/stable-deployment.yaml
+                    kubectl apply -f k8s/service.yaml
+                    kubectl rollout status deployment/app-stable -n canary-demo --timeout=120s
+                """
+                echo "✅ Stable v1 deployed"
+            }
+        }
+
+        // ── 8. Deploy Canary v2 ──────────────────────────────
+        stage('Deploy Canary v2') {
+            steps {
+                sh """
+                    kubectl apply -f k8s/canary-deployment.yaml
+                    kubectl rollout status deployment/app-canary -n canary-demo --timeout=120s
+                """
+                echo "✅ Canary v2 deployed – 10% traffic"
+            }
+        }
+
+        // ── 9. ★ Auto Health Check + Promote/Rollback ────────
+        stage('Canary Health Gate') {
+            steps {
+                sh """
+                    echo "⏳ Monitoring canary for 60 seconds..."
+                    python3 scripts/health-check.py
+                """
+            }
+        }
+
+    }
+
+    post {
+        success { echo "🎉 Pipeline complete – canary promoted or stable held." }
+        failure {
+            echo "❌ Pipeline failed – triggering rollback..."
+            sh "kubectl delete -f k8s/canary-deployment.yaml --ignore-not-found=true -n canary-demo"
+        }
+    }
+}

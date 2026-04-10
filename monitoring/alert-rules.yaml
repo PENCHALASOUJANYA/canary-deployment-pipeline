@@ -1,0 +1,22 @@
+groups:
+  - name: canary-alerts
+    rules:
+      - alert: CanaryHighErrorRate
+        expr: |
+          rate(http_requests_total{status=~"5..", version="v2"}[1m])
+          /
+          rate(http_requests_total{version="v2"}[1m]) > 0.05
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Canary v2 error rate above 5%"
+          description: "Auto-rollback controller will trigger."
+
+      - alert: CanaryPodNotReady
+        expr: kube_pod_status_ready{namespace="canary-demo",pod=~"app-canary.*"} == 0
+        for: 60s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Canary pod is not ready"
